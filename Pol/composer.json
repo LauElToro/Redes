@@ -1,0 +1,15 @@
+{
+    "name": "pc/pol",
+    "autoload": {
+        "psr-4": {
+            "Pc\\Pol\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Lautaro Figueroa",
+            "email": "LautyfigueroaLau@gmail.com"
+        }
+    ],
+    "require": {}
+}
