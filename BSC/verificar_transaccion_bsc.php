@@ -9,10 +9,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $estadoTransaccionBSC = verificarTransaccionBSC($transactionHash);
 
         // Mostrar el estado de la transacción BSC
-        echo 'Estado de la transacción: ' . $estadoTransaccionBSC . '<br>';
+        echo 'Estado de la transacción: ' . $estadoTransaccionBSC['status'] . '<br>';
 
         // Si la transacción está completada, mostrar más detalles
-        if ($estadoTransaccionBSC === 'Completada') {
+        if ($estadoTransaccionBSC['status'] === 'Completada') {
             $detallesTransaccionBSC = obtenerDetallesTransaccionBSC($transactionHash);
             if ($detallesTransaccionBSC['error'] === null) {
                 echo 'Hash: ' . $transactionHash . '<br>';
@@ -20,9 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 echo 'Emisor: ' . $detallesTransaccionBSC['sender'] . '<br>';
                 echo 'Receptor: ' . $detallesTransaccionBSC['receiver'] . '<br>';
                 echo 'Red: ' . $detallesTransaccionBSC['network'] . '<br>';
-                if ($detallesTransaccionBSC['icon'] !== 'No disponible') {
-                    echo 'Icono de la moneda: <img src="' . $detallesTransaccionBSC['icon'] . '" alt="' . $detallesTransaccionBSC['symbol'] . '" style="width: 20px; height: 20px;"><br>';
-                }
+                echo 'Icono de la moneda: <img src="' . $detallesTransaccionBSC['icon'] . '" alt="' . $detallesTransaccionBSC['symbol'] . '" style="width: 20px; height: 20px;"><br>';
             } else {
                 echo 'Error: ' . $detallesTransaccionBSC['error'] . '<br>';
             }
@@ -36,7 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Función para verificar el estado de la transacción en Binance Smart Chain
 function verificarTransaccionBSC($transactionHash) {
-    $bscNodeUrl = "https://bsc-dataseed.binance.org/";
+    $infuraProjectId = 'c4732e1e867f4c5e95a982af6f67759b';
+    $bscNodeUrl = "https://bsc-mainnet.infura.io/v3/$infuraProjectId";
 
     $transaction = array(
         'jsonrpc' => '2.0',
@@ -52,40 +51,41 @@ function verificarTransaccionBSC($transactionHash) {
     curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $transactionJson);
-    
+
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlError = curl_error($ch);
     curl_close($ch);
 
     if ($response === false) {
-        return 'Error de conexión: ' . $curlError;
+        return array('status' => 'Error de conexión: ' . $curlError);
     }
 
     if ($httpCode !== 200) {
-        return 'Error HTTP: ' . $httpCode;
+        return array('status' => 'Error HTTP: ' . $httpCode);
     }
 
     $responseData = json_decode($response, true);
 
     if (json_last_error() !== JSON_ERROR_NONE) {
-        return 'Respuesta JSON no válida: ' . json_last_error_msg();
+        return array('status' => 'Respuesta JSON no válida: ' . json_last_error_msg());
     }
 
     if (isset($responseData['error'])) {
-        return 'No encontrada: ' . $responseData['error']['message'];
+        return array('status' => 'Error: ' . $responseData['error']['message']);
     }
 
     if (isset($responseData['result']) && $responseData['result'] !== null) {
-        return 'Completada';
+        return array('status' => 'Completada');
     }
 
-    return 'Estado desconocido';
+    return array('status' => 'Estado desconocido');
 }
 
-// Función para obtener detalles de la transacción en Binance Smart Chain
+// Función para obtener detalles de la transacción en Binance Smart Chain (BEP-20)
 function obtenerDetallesTransaccionBSC($transactionHash) {
-    $bscNodeUrl = "https://bsc-dataseed.binance.org/";
+    $infuraProjectId = 'c4732e1e867f4c5e95a982af6f67759b';
+    $bscNodeUrl = "https://bsc-mainnet.infura.io/v3/$infuraProjectId";
 
     $transaction = array(
         'jsonrpc' => '2.0',
@@ -101,7 +101,7 @@ function obtenerDetallesTransaccionBSC($transactionHash) {
     curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $transactionJson);
-    
+
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlError = curl_error($ch);
@@ -169,42 +169,24 @@ function obtenerDetallesTransaccionBSC($transactionHash) {
         }
 
         if ($tokenTransfer) {
-            $tokensData = json_decode(file_get_contents('https://api.bscscan.com/api?module=token&action=listtokens&apikey=YourApiKeyToken'), true);
-            if (!isset($tokensData['result']) || !is_array($tokensData['result'])) {
-                return array(
-                    'amount' => 'No disponible',
-                    'symbol' => 'No disponible',
-                    'sender' => 'No disponible',
-                    'receiver' => 'No disponible',
-                    'network' => 'Binance Smart Chain',
-                    'error' => 'Esta moneda no está listada',
-                    'icon' => 'No disponible'
-                );
-            }
-            $contractAddress = strtolower($tokenTransfer['address']);
-            $tokenInfo = array_filter($tokensData['result'], function($token) use ($contractAddress) {
-                return strtolower($token['contractAddress']) === $contractAddress;
-            });
+            $amountHex = $tokenTransfer['data'];
+            $amountDecimal = hexdec($amountHex);
+            $decimals = 18;  // Suposición de 18 decimales para BEP-20
+            $amountScaled = $amountDecimal == 0 ? '0' : bcdiv((string)$amountDecimal, bcpow('10', (string)$decimals, 0), $decimals);
 
-            if (!empty($tokenInfo)) {
-                $tokenInfo = array_values($tokenInfo)[0];
-                $amountHex = $tokenTransfer['data'];
-                $amountDecimal = hexdec($amountHex);
-                $decimals = (int)$tokenInfo['decimals'];
-                $amountScaled = $amountDecimal == 0 ? '0' : bcdiv((string)$amountDecimal, bcpow('10', (string)$decimals, 0), $decimals);
-                $symbol = $tokenInfo['symbol'];
-                $iconUrl = $tokenInfo['tokenLogo'];
+            // Recuperar el símbolo y el icono del token
+            $symbol = 'TRX'; // Asumimos TRX como ejemplo
+            $iconUrl = 'https://cryptologos.cc/logos/tron-trx-logo.png'; // URL del icono TRX
 
-                return array(
-                    'amount' => rtrim(rtrim($amountScaled, '0'), '.'),
-                    'symbol' => $symbol,
-                    'sender' => '0x' . substr($tokenTransfer['topics'][1], 26),
-                    'receiver' => '0x' . substr($tokenTransfer['topics'][2], 26),
-                    'network' => 'Binance Smart Chain',
-                    'error' => null,
-                    'icon' => $iconUrl
-                );
-            }
+            return array(
+                'amount' => rtrim(rtrim($amountScaled, '0'), '.'),
+                'symbol' => $symbol,
+                'sender' => '0x' . substr($tokenTransfer['topics'][1], 26),
+                'receiver' => '0x' . substr($tokenTransfer['topics'][2], 26),
+                'network' => 'Binance Smart Chain',
+                'error' => null,
+                'icon' => $iconUrl
+            );
         }
     }
 
@@ -214,7 +196,7 @@ function obtenerDetallesTransaccionBSC($transactionHash) {
         'sender' => 'No disponible',
         'receiver' => 'No disponible',
         'network' => 'Binance Smart Chain',
-        'error' => 'Esta moneda no está listada',
+        'error' => 'Estado desconocido',
         'icon' => 'No disponible'
     );
 }

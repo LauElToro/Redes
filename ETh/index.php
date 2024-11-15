@@ -29,7 +29,7 @@
             }
 
             $.ajax({
-                url: 'verificar_transaccion_limitada.php', // archivo PHP donde está el código que proporcionaste
+                url: 'verificar_transaccion_limitada.php', 
                 type: 'POST',
                 data: { hash: transactionHash },
                 success: function (response) {

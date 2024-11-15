@@ -208,7 +208,7 @@ function obtenerDetallesTransaccionETH($transactionHash) {
                 $iconUrl = $tokenInfo['logoURI'];
 
                 return array(
-                    'amount' => rtrim(rtrim($amountScaled, '0'), '.'), // Eliminar ceros innecesarios
+                    'amount' => rtrim(rtrim($amountScaled, '0'), '.'), 
                     'symbol' => $symbol,
                     'sender' => '0x' . substr($tokenTransfer['topics'][1], 26),
                     'receiver' => '0x' . substr($tokenTransfer['topics'][2], 26),
